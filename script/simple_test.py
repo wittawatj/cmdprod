@@ -1,4 +1,4 @@
-import cmdperm as cp
+import cmdprod as cp
 
 def main():
     pk = cp.Param('k', ['gauss', 'imq'])
