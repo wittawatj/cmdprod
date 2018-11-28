@@ -8,6 +8,7 @@ from abc import ABCMeta, abstractmethod
 from future.utils import with_metaclass
 import collections
 import itertools
+import sys
 
 
 class Values(object):
@@ -56,7 +57,7 @@ class ValFixedIter(Values):
 
 class InstanceArgsFormatter(object):
     """
-    A string formatter for an InstanceArgs e.g., a full command line.
+    A string formatter for an InstanceArgs e.g., one full command line.
     """
 
     @abstractmethod 
@@ -94,6 +95,43 @@ class IAFArgparse(InstanceArgsFormatter):
             
         s = self.pv_sep.join(name_values)
         return s
+
+class ArgsProcessor(object):
+    """
+    A processor that iterates over all InstanceArgs in an Args and outputs them
+    in some way.
+    """
+    @abstractmethod
+    def process_args(self, args):
+        '''
+        args: an Args
+        '''
+        pass
+
+    def __call__(self, args):
+        return self.process_args(args)
+
+
+class APPrint(ArgsProcessor):
+    """
+    An ArgsProcessor that prints each command (InstanceArgs) to the stdout.
+    """
+    def __init__(self, iaf=IAFArgparse(), prefix='', suffix='\n'):
+        '''
+        iaf: an InstanceArgsFormatter to format each line
+        prefix: string to prepend to each output line
+        suffix: string to append to each output line
+        '''
+        self.iaf = iaf
+        self.prefix = prefix
+        self.suffix = suffix
+
+    def process_args(self, args):
+        for ar in args:
+            assert isinstance(ar, InstanceArgs)
+            line = self.prefix + self.iaf(ar) + self.suffix
+            sys.stdout.write(line)
+
 
 # class PV(object):
 #     """
@@ -170,15 +208,6 @@ class ParamGroup(ParamUnit):
                 l.append( (parami, v[i]) )
             yield l
 
-
-    # def render(self, value, formatter):
-    #     '''
-    #     Render this parameter group. value is a tuple of values, one for each
-    #     parameter.  Each parameter-value is passed to the formatter.
-
-    #     Return a rendered string.
-    #     '''
-    #     pass
 
 
 class Param(ParamUnit):
@@ -264,12 +293,4 @@ class InstanceArgs(object):
 
 
 #---------------------------------------
-
-def perm_simple():
-    """
-    Permute all arguments where each one is given an explicit list of possible
-    values.
-    """
-    pass
-
 
