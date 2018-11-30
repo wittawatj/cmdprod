@@ -187,9 +187,8 @@ class ParamGroup(ParamUnit):
             raise ValueError('keys cannot be empty. Was {}'.format(keys))
         self.keys = keys
         self.values = values
-        # if not isinstance(values, Values):
-        #     raise ValueError('values has to be of type {}. Was {}'.format(str(Values), values))
-        assert isinstance(values, collections.Iterable)
+        if not isinstance(values, collections.Iterable):
+            raise ValueError('values has to be iterable. Was {}'.format(values))
         if outputs is not None:
             assert len(keys)==len(outputs)
         self.outputs = outputs
@@ -226,8 +225,9 @@ class Param(ParamUnit):
         if not key:
             raise ValueError('key cannot be empty. Was {}'.format(key))
         self.key = key
-        if not isinstance(values, Values):
-            raise ValueError('values has to be of type {}. Was {}'.format(str(Values), values))
+        if not isinstance(values, collections.Iterable):
+            raise ValueError('values has to be iterable. Was {}'.format( values))
+        
         self.values = values
         self.output = output
 
