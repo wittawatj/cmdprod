@@ -71,17 +71,77 @@ class InstanceArgsFormatter(object):
     def __call__(self, instance_args):
         return self.format(instance_args)
 
+class ValueFormatter(object):
+    """
+    An abstract class representing a formatter for one value.
+    Each formatting method (e.g., format_*) returns a formmatted value of type
+    string.
+    """
+    @abstractmethod
+    def format_float(self, value):
+        raise NotImplementedError()
+
+    @abstractmethod 
+    def format_list(self, value):
+        raise NotImplementedError()
+
+    def __call__(self, value):
+        return self.format_value(value)
+
+    def format_value(self, value):
+        """
+        Classify into its correct type and call the right format_* method.
+        If the type is unclear, simply call str(.) and return its value.
+        """
+        if isinstance(value, float):
+            return self.format_float(value)
+        elif isinstance(value, list):
+            return self.format_list(value)
+        else:
+            # type is unknown. The following line may fail.
+            return str(value)
+
+class VFArgParse(ValueFormatter):
+    """
+    A ValueFormatter which is suitable for normal use of argparse.
+    """
+    def __init__(self, float_format='{}', list_open='', list_close='', list_value_sep=', '):
+        """
+        float_format: string format (used with string.format) for
+            floating-point values.
+        list_open: a string representing the openning of value of type list.
+            Could be '(', or '[' or others.
+        list_close: a string representing the closing of value of type list.
+            Could be ')', or ']' or others.
+        list_value_sep: a string to separate entries in a list
+        """
+        self.float_format = float_format
+        self.list_open = list_open
+        self.list_close = list_close
+        self.list_value_sep = list_value_sep
+
+    def format_float(self, value):
+        return self.float_format.format(value)
+
+    def format_list(self, value):
+        if not isinstance(value, list):
+            raise ValueError('value should be a list. Was {}'.format(value))
+        list_formatted = [self.format_value(v) for v in value]
+        s = self.list_open + self.list_value_sep.join(list_formatted) + self.list_close
+        return s
 
 class IAFArgparse(InstanceArgsFormatter):
     """
     An InstanceArgsFormatter which renders into a string command line that
     mimics what argparse module takes as an input.
     """
-    def __init__(self, pv_sep=' '):
+    def __init__(self, pv_sep=' ', value_formatter=VFArgParse()):
         """
         pv_sep: a string separator between two parameter-value pairs
+        value_formatter: a ValueFormatter to format values
         """
         self.pv_sep = pv_sep
+        self.value_formatter = value_formatter
 
     def format(self, instance_args):
         # list of (Param, value)'s
@@ -90,7 +150,8 @@ class IAFArgparse(InstanceArgsFormatter):
         for p,v in pvs:
             # not None => user specifies what to output
             out_name = p.output if p.output is not None else '--'+p.key
-            entry = '{} {}'.format(out_name, v) 
+            formatted_v = self.value_formatter(v)
+            entry = '{} {}'.format(out_name, formatted_v) 
             name_values.append(entry)
             
         s = self.pv_sep.join(name_values)
@@ -98,15 +159,15 @@ class IAFArgparse(InstanceArgsFormatter):
 
 class ArgsProcessor(object):
     """
-    A processor that iterates over all InstanceArgs in an Args and outputs them
-    in some way.
+    Abstract class.  A processor that iterates over all InstanceArgs in an Args
+    and outputs them in some way.
     """
     @abstractmethod
     def process_args(self, args):
         '''
-        args: an Args
+        args: an instance of Args
         '''
-        pass
+        raise NotImplementedError('Subclasses should implement this method')
 
     def __call__(self, args):
         return self.process_args(args)
