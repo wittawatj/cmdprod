@@ -7,7 +7,10 @@ __author__ = 'Wittawat'
 from abc import ABCMeta, abstractmethod
 from future.utils import with_metaclass
 import collections
+import cmdprod
+import cmdprod.util as util
 import itertools
+import os
 import sys
 
 
@@ -135,12 +138,17 @@ class IAFArgparse(InstanceArgsFormatter):
     An InstanceArgsFormatter which renders into a string command line that
     mimics what argparse module takes as an input.
     """
-    def __init__(self, pv_sep=' ', value_formatter=VFArgParse()):
+    def __init__(self, pv_sep=' ', pv_prefix='', pv_suffix='',
+                 value_formatter=VFArgParse()):
         """
         pv_sep: a string separator between two parameter-value pairs
+        pv_prefix: string to print before each parameter-value pair
+        pv_suffix: string to print after each parameter-value pair
         value_formatter: a ValueFormatter to format values
         """
         self.pv_sep = pv_sep
+        self.pv_prefix = pv_prefix
+        self.pv_suffix = pv_suffix
         self.value_formatter = value_formatter
 
     def format(self, instance_args):
@@ -151,7 +159,7 @@ class IAFArgparse(InstanceArgsFormatter):
             # not None => user specifies what to output
             out_name = p.output if p.output is not None else '--'+p.key
             formatted_v = self.value_formatter(v)
-            entry = '{} {}'.format(out_name, formatted_v) 
+            entry = '{}{} {}{}'.format(self.pv_prefix, out_name, formatted_v, self.pv_suffix)
             name_values.append(entry)
             
         s = self.pv_sep.join(name_values)
@@ -192,6 +200,108 @@ class APPrint(ArgsProcessor):
             assert isinstance(ar, InstanceArgs)
             line = self.prefix + self.iaf(ar) + self.suffix
             sys.stdout.write(line)
+
+class APPerBashFile(ArgsProcessor):
+    """
+    An ArgsProcessor that prints each command (InstanceArgs) to one Bash script
+    file. One use is for creating submission files to a computing cluster.
+    """
+    def __init__(self, dirpath, create_run_token=False, iaf=IAFArgparse(),
+                 file_begin='', file_end='', line_begin='', line_end='',
+                 fname_func=None):
+        '''
+        dirpath: string denoting the path to a directory to contain the
+            generated files.
+        create_run_token: if True, wrap the command with if ... fi so that the
+            command is run only when its token file does not exist. A token
+            file is created when the command is successfully executed.
+        iaf: an InstanceArgsFormatter to format each InstanceArgs (line)
+        file_begin: string to include at the beginning of each file.
+        file_end: string to include at the end of each file.
+        line_begin: string to include at the beginning of each line
+        line_end: string to include at the end of each line
+        fname_func: a callable InstanceArgs -> string which turns an
+            InstanceArgs into string for naming each file. If not specified,
+            use SHA1 to hash InstanceArgs. Set extension to .sh.
+        '''
+        if os.path.isfile(dirpath):
+            raise ValueError('The specified dirpath is a file: {}. Has to be a directory'.format(dirpath))
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+
+        self.dirpath = dirpath
+        self.create_run_token = create_run_token
+        self.iaf = iaf
+        self.file_begin = file_begin
+        self.file_end = file_end
+        self.line_begin = line_begin
+        self.line_end = line_end
+        if fname_func is None:
+            def hash_instanceargs(ia, extension='.sh'):
+                # turn the InstanceArgs into string
+                ia_str = iaf.format(ia)
+                # hash
+                h = util.simple_object_hash(ia_str)
+                h = h[:14]
+                return h + extension
+            fname_func = hash_instanceargs
+
+        self.fname_func = fname_func
+
+    def _wrap_bash_token_block(self, content, token_fname):
+        """
+        Wrap the string content with  the token block (i.e., only execute if
+        the token file does not exist).
+        Return a string
+        """
+        template =  \
+        '''
+if [ ! -f {} ]; then
+
+{}
+
+    if [ $? -eq 0 ]; then
+        touch {}
+    fi
+fi
+        '''
+        wrap = template.format(token_fname, content, token_fname)
+        return wrap
+
+    # def _get_file_content(self, ia):
+    #     """
+    #     ia: InstanceArgs
+    #     """
+    #     # form the file content
+    #     cmd = self.iaf(ia)
+    #     line = self.line_begin + cmd + self.line_end
+    #     # print(cmd)
+    #     content = self.file_begin + os.linesep + line + os.linesep + self.file_end
+    #     return content
+
+    def process_args(self, args):
+        '''
+        args: an instance of Args
+
+        Write a file for each InstanceArgs in args.
+        '''
+        for ia in args:
+            assert isinstance(ia, InstanceArgs)
+            cmd = self.iaf(ia)
+            line = self.line_begin + cmd + self.line_end
+
+            # get the file name to write to
+            fname = self.fname_func(ia)
+            if self.create_run_token:
+                token_fname = fname + '.token'
+                token_fpath = os.path.abspath( os.path.join(self.dirpath, token_fname) )
+                line = self._wrap_bash_token_block(line, token_fpath)
+
+            content = self.file_begin + os.linesep + line + os.linesep + self.file_end
+            # write to file
+            fpath = os.path.join(self.dirpath, fname)
+            with open(fpath, 'w') as f:
+                f.write(content)
 
 
 # class PV(object):
