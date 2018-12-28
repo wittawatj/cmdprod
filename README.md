@@ -17,6 +17,7 @@ Cartesian product and generate command-line arguments
 
 ```python
 import cmdprod as cp
+import numpy as np
 
 kgroup = cp.ParamGroup(
     ['k', 'kparams'], 
