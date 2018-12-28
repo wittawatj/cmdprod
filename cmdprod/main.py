@@ -206,15 +206,16 @@ class APPerBashFile(ArgsProcessor):
     An ArgsProcessor that prints each command (InstanceArgs) to one Bash script
     file. One use is for creating submission files to a computing cluster.
     """
-    def __init__(self, dirpath, create_run_token=False, iaf=IAFArgparse(),
+    def __init__(self, dest_path, token_path=None, iaf=IAFArgparse(),
                  file_begin='', file_end='', line_begin='', line_end='',
                  fname_func=None):
         '''
-        dirpath: string denoting the path to a directory to contain the
+        dest_path: string denoting the path to a directory to contain the
             generated files.
-        create_run_token: if True, wrap the command with if ... fi so that the
-            command is run only when its token file does not exist. A token
-            file is created when the command is successfully executed.
+        token_path: path to a folder to store token files. If not None, wrap
+            the command with if ... fi so that the command is run only when its
+            token file does not exist. A token file is created when the command
+            is successfully executed. If None, no token is created.
         iaf: an InstanceArgsFormatter to format each InstanceArgs (line)
         file_begin: string to include at the beginning of each file.
         file_end: string to include at the end of each file.
@@ -224,13 +225,13 @@ class APPerBashFile(ArgsProcessor):
             InstanceArgs into string for naming each file. If not specified,
             use SHA1 to hash InstanceArgs. Set extension to .sh.
         '''
-        if os.path.isfile(dirpath):
-            raise ValueError('The specified dirpath is a file: {}. Has to be a directory'.format(dirpath))
-        if not os.path.exists(dirpath):
-            os.makedirs(dirpath)
+        if os.path.isfile(dest_path):
+            raise ValueError('The specified dest_path is a file: {}. Has to be a directory'.format(dest_path))
+        if not os.path.exists(dest_path):
+            os.makedirs(dest_path)
 
-        self.dirpath = dirpath
-        self.create_run_token = create_run_token
+        self.dest_path = dest_path
+        self.token_path = token_path
         self.iaf = iaf
         self.file_begin = file_begin
         self.file_end = file_end
@@ -242,7 +243,7 @@ class APPerBashFile(ArgsProcessor):
                 ia_str = iaf.format(ia)
                 # hash
                 h = util.simple_object_hash(ia_str)
-                h = h[:14]
+                h = h[:12]
                 return h + extension
             fname_func = hash_instanceargs
 
@@ -292,14 +293,14 @@ fi
 
             # get the file name to write to
             fname = self.fname_func(ia)
-            if self.create_run_token:
+            if self.token_path is not None:
                 token_fname = fname + '.token'
-                token_fpath = os.path.abspath( os.path.join(self.dirpath, token_fname) )
+                token_fpath = os.path.join(self.token_path, token_fname)
                 line = self._wrap_bash_token_block(line, token_fpath)
 
             content = self.file_begin + os.linesep + line + os.linesep + self.file_end
             # write to file
-            fpath = os.path.join(self.dirpath, fname)
+            fpath = os.path.join(self.dest_path, fname)
             with open(fpath, 'w') as f:
                 f.write(content)
 
