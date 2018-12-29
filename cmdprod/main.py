@@ -249,7 +249,7 @@ class APPerBashFile(ArgsProcessor):
 
         self.fname_func = fname_func
 
-    def _wrap_bash_token_block(self, content, token_fname):
+    def _wrap_bash_token_block(self, content, token_fpath):
         """
         Wrap the string content with  the token block (i.e., only execute if
         the token file does not exist).
@@ -262,11 +262,13 @@ if [ ! -f {} ]; then
 {}
 
     if [ $? -eq 0 ]; then
+        mkdir -p {}
         touch {}
     fi
 fi
         '''
-        wrap = template.format(token_fname, content, token_fname)
+        token_folder = os.path.dirname(token_fpath)
+        wrap = template.format(token_fpath, content, token_folder, token_fpath)
         return wrap
 
     # def _get_file_content(self, ia):
